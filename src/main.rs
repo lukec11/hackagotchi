@@ -52,8 +52,6 @@ lazy_static::lazy_static! {
     pub static ref LOCAL_DB: bool = std::env::var("LOCAL_DB").is_ok();
 }
 
-this is a test to obviously screw up, and theoretically travis should fail.
-
 pub fn mrkdwn<S: std::string::ToString>(txt: S) -> Value {
     json!({
         "type": "mrkdwn",
