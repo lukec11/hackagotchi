@@ -9,7 +9,7 @@ lazy_static::lazy_static! {
 }
 fn banker_balance<'a>(
     c: regex::Captures<'a>,
-    _: Message<'a>,
+    _: Message,
     _: &'a Sender<FarmingInputEvent>,
 ) -> HandlerOutput<'a> {
     async move {
@@ -24,7 +24,7 @@ fn banker_balance<'a>(
 
         let query = dyn_db()
             .query(rusoto_dynamodb::QueryInput {
-                table_name: core::TABLE_NAME.to_string(),
+                table_name: hcor::TABLE_NAME.to_string(),
                 key_condition_expression: Some("cat = :gotchi_cat".to_string()),
                 expression_attribute_values: Some({
                     [(":gotchi_cat".to_string(), Category::Gotchi.into_av())]
@@ -80,7 +80,7 @@ fn banker_balance<'a>(
                 );
                 let steader_in_harvest_log: bool = gotchi.inner.harvest_log.last().filter(|x| x.id == gotchi.steader).is_some();
                 let db_update = rusoto_dynamodb::UpdateItemInput {
-                    table_name: core::TABLE_NAME.to_string(),
+                    table_name: hcor::TABLE_NAME.to_string(),
                     key: gotchi.clone().into_possession().key().into_item(),
                     update_expression: Some(if steader_in_harvest_log {
                         format!("ADD harvest_log[{}].harvested :harv", gotchi.inner.harvest_log.len() - 1)
@@ -115,7 +115,7 @@ fn banker_balance<'a>(
 
                 async move {
                     futures::try_join!(
-                        dm_blocks(gotchi.steader.clone(), dm),
+                        dm_blocks(gotchi.steader.clone(), "It's GP Time! Your Gotchi produced some GP for you...".to_string(), dm),
                         banker::pay(gotchi.steader.clone(), gotchi.inner.base_happiness, payment_note),
                         db.update_item(db_update).map_err(|e| format!("Couldn't update owner log: {}", e))
                     )?;

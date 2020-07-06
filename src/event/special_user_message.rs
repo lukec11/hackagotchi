@@ -9,7 +9,7 @@ lazy_static::lazy_static! {
 }
 fn spawn_command<'a>(
     c: regex::Captures<'a>,
-    r: Message<'a>,
+    r: Message,
     _: &'a Sender<FarmingInputEvent>,
 ) -> HandlerOutput<'a> {
     async move {
@@ -36,59 +36,68 @@ fn spawn_command<'a>(
             .get(archetype_handle)
             .expect("invalid archetype handle");
 
-        market::log_blocks(vec![
-            json!({
-                "type": "section",
-                "text": mrkdwn(format!(
-                    concat!(
-                        "*{}* new {} *{}* {} been spawned! ",
-                        "Special user <@{}> spawned it for <@{}>.",
-                    ),
-                    amount,
-                    emojify(&arch.name),
-                    arch.name,
-                    if amount == 1 {
-                        "has"
-                    } else {
-                        "have"
-                    },
-                    &r.user_id,
-                    &receiver,
-                )),
-                "accessory": {
-                    "type": "image",
-                    "image_url": format!(
-                        "http://{}/gotchi/img/{}/{}.png",
-                        *URL,
-                        format!("{:?}", arch.kind.category()).to_lowercase(),
-                        filify(&arch.name)
-                    ),
-                    "alt_text": "Hackpheus holding a Gift!",
-                }
-            }),
-            comment("U GET AN EGG, U GET AN EGG, U GET AN EGG!"),
-        ])
+        market::log_blocks(
+            format!(
+                "<@{}> spawned {} {} for <@{}>!",
+                &r.user_id,
+                if amount == 1 {
+                    "a".to_string()
+                } else {
+                    amount.to_string()
+                },
+                arch.name,
+                &receiver
+            )
+            .to_string(),
+            vec![
+                json!({
+                    "type": "section",
+                    "text": mrkdwn(format!(
+                        concat!(
+                            "*{}* new {} *{}* {} been spawned! ",
+                            "Special user <@{}> spawned {} for <@{}>.",
+                        ),
+                        amount,
+                        emojify(&arch.name),
+                        arch.name,
+                        if amount == 1 {
+                            "has"
+                        } else {
+                            "have"
+                        },
+                        &r.user_id,
+                        if amount == 1 {
+                            "it"
+                        } else {
+                            "them"
+                        },
+                        &receiver,
+                    )),
+                    "accessory": {
+                        "type": "image",
+                        "image_url": format!(
+                            "http://{}/gotchi/img/{}/{}.png",
+                            *URL,
+                            format!("{:?}", arch.kind.category()).to_lowercase(),
+                            filify(&arch.name)
+                        ),
+                        "alt_text": "Hackpheus holding a Gift!",
+                    }
+                }),
+                comment("U GET AN EGG, U GET AN EGG, U GET AN EGG!"),
+            ],
+        )
         .await?;
 
         // todo: async concurrency
         for _ in 0_usize..amount {
-            Hacksteader::give_possession(
-                &dyn_db(),
-                receiver.clone(),
-                &Possession::new(
-                    archetype_handle,
-                    possess::Owner {
-                        id: receiver.clone(),
-                        acquisition: possess::Acquisition::spawned(),
-                    },
-                ),
-            )
-            .await
-            .map_err(|e| {
-                let a = format!("couldn't spawn possession: {}", e);
-                error!("{}", e);
-                a
-            })?;
+            Hacksteader::spawn_possession(&dyn_db(), receiver.clone(), archetype_handle)
+                .await
+                .map_err(|e| {
+                    let a = format!("couldn't spawn possession: {}", e);
+                    error!("{}", e);
+                    a
+                })?;
         }
         Ok(())
     }
@@ -103,7 +112,7 @@ lazy_static::lazy_static! {
 }
 fn gp_dump_command<'a>(
     c: regex::Captures<'a>,
-    _: Message<'a>,
+    _: Message,
     _: &'a Sender<FarmingInputEvent>,
 ) -> HandlerOutput<'a> {
     async move {
@@ -134,13 +143,13 @@ lazy_static::lazy_static! {
 }
 fn yank_config<'a>(
     _: regex::Captures<'a>,
-    _: Message<'a>,
+    _: Message,
     _: &'a Sender<FarmingInputEvent>,
 ) -> HandlerOutput<'a> {
     const CHANTING_DESCRIPTIONS: &'static [&'static str] = &[
         "eerie",
         "eldritch",
-        "rythmic",
+        "rhythmic",
         "spooky",
         "tribal",
         "unholy",
@@ -153,8 +162,10 @@ fn yank_config<'a>(
     async move {
         banker::message(match crate::yank_config::yank_config().await {
             Ok(()) => format!(
-                "{} goblin chanting hath brought forth new config from the heavens!", 
-                CHANTING_DESCRIPTIONS.choose(&mut rand::thread_rng()).unwrap()
+                "{} goblin chanting hath brought forth new config from the heavens!",
+                CHANTING_DESCRIPTIONS
+                    .choose(&mut rand::thread_rng())
+                    .unwrap()
             ),
             Err(e) => format!("goblin chanting interrupted by vile belch:\n{}", e),
         })
@@ -171,7 +182,7 @@ lazy_static::lazy_static! {
 }
 fn stomp_command<'a>(
     _: regex::Captures<'a>,
-    _: Message<'a>,
+    _: Message,
     to_farming: &'a Sender<FarmingInputEvent>,
 ) -> HandlerOutput<'a> {
     async move {
@@ -194,7 +205,7 @@ lazy_static::lazy_static! {
 }
 fn slaughter_command<'a>(
     _: regex::Captures<'a>,
-    _: Message<'a>,
+    _: Message,
     _: &'a Sender<FarmingInputEvent>,
 ) -> HandlerOutput<'a> {
     async move {
@@ -217,7 +228,7 @@ lazy_static::lazy_static! {
 }
 fn nab_command<'a>(
     c: regex::Captures<'a>,
-    _: Message<'a>,
+    _: Message,
     _: &'a Sender<FarmingInputEvent>,
 ) -> HandlerOutput<'a> {
     async move {
@@ -234,7 +245,7 @@ fn nab_command<'a>(
         let db = &dyn_db();
 
         let scan = db.scan(rusoto_dynamodb::ScanInput {
-            table_name: core::TABLE_NAME.to_string(),
+            table_name: hcor::TABLE_NAME.to_string(),
             filter_expression: Some("cat = :item_cat AND archetype_handle = :ah".to_string()),
             expression_attribute_values: Some(
                 [
@@ -277,7 +288,7 @@ fn nab_command<'a>(
                         .chunks(25)
                         .map(|items| {
                             db.batch_write_item(rusoto_dynamodb::BatchWriteItemInput {
-                                request_items: [(core::TABLE_NAME.to_string(), items.to_vec())]
+                                request_items: [(hcor::TABLE_NAME.to_string(), items.to_vec())]
                                     .iter()
                                     .cloned()
                                     .collect(),
